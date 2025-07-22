@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Controle de Apartamentos</title>
+    <!-- Incluindo o Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Incluindo a fonte Inter do Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bibliotecas para Geração de PDF -->
+    <script src="https://unpkg.com/jspdf@latest/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.5.23/dist/jspdf.plugin.autotable.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f2f5; }
+        .table-container::-webkit-scrollbar { height: 8px; }
+        .table-container::-webkit-scrollbar-track { background-color: #f1f1f1; border-radius: 10px; }
+        .table-container::-webkit-scrollbar-thumb { background-color: #888; border-radius: 10px; }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .editable-input { background-color: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 0.875rem; border-radius: 0.5rem; padding: 0.375rem 0.75rem; transition: all 0.2s ease-in-out; }
+        .editable-input:focus { --tw-ring-color: #3b82f6; border-color: #3b82f6; outline: 2px solid transparent; outline-offset: 2px; box-shadow: 0 0 0 2px var(--tw-ring-color); }
+        .editable-input:disabled { background-color: #e5e7eb; cursor: not-allowed; }
+        .main-tab { transition: all 0.3s ease; }
+        .main-tab.active { border-color: #3b82f6; background-color: #3b82f6; color: white; font-weight: 600; }
+        
+        .calendar-container { padding: 1rem; border-radius: 0.75rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); background-color: white; max-width: 600px; margin: auto; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.5rem; }
+        .calendar-day-name { font-weight: 600; color: #4b5563; text-align: center; padding: 0.5rem; background-color: #f9fafb; border-radius: 0.5rem; }
+        .calendar-day { display: flex; justify-content: center; align-items: center; height: 50px; border: 1px solid #e5e7eb; border-radius: 0.5rem; cursor: pointer; transition: all 0.2s ease-in-out; font-weight: 600; }
+        .calendar-day:not(.empty):hover { background-color: #f3f4f6; }
+        .calendar-day.flat-201 { background-color: #bfdbfe; color: #1e40af; border-color: #93c5fd; }
+        .calendar-day.flat-202 { background-color: #bbf7d0; color: #166534; border-color: #86efac; }
+        .calendar-day.flat-301 { background-color: #c7d2fe; color: #3730a3; border-color: #a5b4fc; }
+        .calendar-day.multiple { background-color: #fef08a; color: #854d0e; border-color: #fde047; }
+        .calendar-day.selected { border: 2px solid #2563eb; background-color: #dbeafe; }
+        .calendar-day.empty { background-color: transparent; border: 1px solid #f3f4f6; cursor: default; }
+    </style>
+</head>
+<body class=" text-gray-800">
+
+    <div class="w-full p-4 sm:p-6 lg:p-8">
+        
+        <main class="bg-white rounded-xl shadow-md p-6 fade-in">
+            <!-- Abas Principais (Reservas, Calendário, Finanças) -->
+            <div id="main-tabs-container" class="mb-6">
+                <div class="border-b border-gray-200">
+                    <nav class="-mb-px flex flex-wrap gap-x-6 gap-y-2" aria-label="Tabs">
+                        <!-- Abas principais serão inseridas aqui -->
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Visão da Tabela (Padrão) -->
+            <div id="table-view">
+                 <div id="month-tabs-container" class="mb-6"></div>
+                <!-- Seção de Filtro, Busca e Ações -->
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <div class="relative w-full sm:max-w-xs">
+                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg></span>
+                        <input type="text" id="searchInput" placeholder="Buscar no mês atual..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <button id="toggle-view-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition">
+                            Mostrar Finanças
+                        </button>
+                        <button id="download-reception-pdf-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 9a3 3 0 100-6 3 3 0 000 6zM6 8a2 2 0 11-4 0 2 2 0 014 0zM1.49 15.326a.78.78 0 01-.358-.442 3 3 0 014.308-3.516 6.484 6.484 0 00-1.905 3.959c-.023.222-.014.442.028.658a.78.78 0 01-.358.442zM20 12a3 3 0 10-6 0 3 3 0 006 0zM13 8a2 2 0 11-4 0 2 2 0 014 0zM12.9 15.326a.78.78 0 01.358-.442 3 3 0 01-4.308-3.516 6.484 6.484 0 001.905 3.959c.023.222.014.442-.028.658a.78.78 0 01.358.442z" /></svg>
+                            Recepção
+                        </button>
+                        <button id="download-cleaning-pdf-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-yellow-500 text-white font-semibold rounded-lg shadow-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-400 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+                            Faxina
+                        </button>
+                        <button id="download-pdf-btn" class="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" /></svg>
+                            Informações gerais
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto table-container rounded-lg border border-gray-200">
+                    <table class="w-full text-sm text-left text-gray-600">
+                        <thead class="bg-gray-50 text-xs text-gray-700 uppercase"></thead>
+                        <tbody id="apartment-table-body"></tbody>
+                        <tfoot id="table-footer" class="border-t-2 border-gray-300"></tfoot>
+                    </table>
+                </div>
+                <p id="no-results" class="text-center text-gray-500 mt-6 hidden">Nenhum resultado encontrado.</p>
+            </div>
+
+            <!-- Visão do Calendário -->
+            <div id="calendar-view" class="hidden">
+                 <div class="calendar-container">
+                    <div class="calendar-header">
+                        <button id="prev-month-btn" class="p-2 rounded-full hover:bg-gray-200 transition"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg></button>
+                        <h2 id="calendar-month-year" class="text-xl font-bold"></h2>
+                        <button id="next-month-btn" class="p-2 rounded-full hover:bg-gray-200 transition"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg></button>
+                    </div>
+                     <div class="my-4">
+                        <label for="flat-filter" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Flat:</label>
+                        <select id="flat-filter" class="editable-input w-full"></select>
+                    </div>
+                    <div id="calendar-grid" class="calendar-grid"></div>
+                </div>
+                <div id="calendar-details" class="mt-6 p-4 bg-gray-50 rounded-lg min-h-[100px]"></div>
+            </div>
+            
+            <!-- Visão de Finanças -->
+            <div id="finance-view" class="hidden">
+                <div id="finance-content-container"></div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+            const userFlats = ["201", "301", "202", "201", "202", "301", "202", "201", "301", "201", "202"];
+            const uniqueFlats = [...new Set(userFlats)].sort();
+            
+            const appState = {
+                activeView: 'table', 
+                activeMonth: months[new Date().getMonth()],
+                calendarDate: new Date(),
+                calendarFlatFilter: 'all',
+                financeViewActive: false,
+                monthlyData: {}
+            };
+
+            const carneLeaoTemplate = {
+                receitas: { airbnb201: 0, airbnb202: 0, airbnb301: 0, booking201: 0, booking202: 0, booking301: 0 },
+                despesas: { condominio201: 0, condominio202: 0, condominio301: 0, celpe201: 0, celpe202: 0, celpe301: 0, comissaoAirbnb201: 0, comissaoAirbnb202: 0, comissaoAirbnb301: 0, comissaoBooking201: 0, comissaoBooking202: 0, comissaoBooking301: 0 },
+                impostoDevido: 0
+            };
+
+            months.forEach(month => {
+                appState.monthlyData[month] = {
+                    apartments: userFlats.map((flatNumber, index) => {
+                        let valorFaxina = 0, lavandariaQtd = 0;
+                        if (flatNumber === '201' || flatNumber === '301') { valorFaxina = 100; lavandariaQtd = 25; } 
+                        else if (flatNumber === '202') { valorFaxina = 80; lavandariaQtd = 15; }
+                        return { id: `${flatNumber}-${index}`, flat: flatNumber, plataforma: "Airbnb", hospede: "", checkin: "", checkout: "", valorFaxina: valorFaxina, lavandariaQtd: 0, lavandariaExtra: "Não", lavandariaExtraQtd: 0, ganhosBrutos: 0, taxasServico: 0 };
+                    }),
+                    adiantamento: 0,
+                    finance: JSON.parse(JSON.stringify(carneLeaoTemplate)) 
+                };
+            });
+
+            const LAUNDRY_PRICE = 3.00;
+            const platforms = ["Airbnb", "Booking"];
+            
+            const tableView = document.getElementById('table-view');
+            const calendarView = document.getElementById('calendar-view');
+            const financeView = document.getElementById('finance-view');
+            const tableBody = document.getElementById('apartment-table-body');
+            const tableFooter = document.getElementById('table-footer');
+            const searchInput = document.getElementById('searchInput');
+            const noResultsMessage = document.getElementById('no-results');
+            const mainTabsContainer = document.querySelector('#main-tabs-container nav');
+            const monthTabsContainer = document.getElementById('month-tabs-container');
+            const flatFilterSelect = document.getElementById('flat-filter');
+            const fullPdfButton = document.getElementById('download-pdf-btn');
+            const receptionPdfButton = document.getElementById('download-reception-pdf-btn');
+            const cleaningPdfButton = document.getElementById('download-cleaning-pdf-btn');
+            const toggleViewBtn = document.getElementById('toggle-view-btn');
+            
+            function formatCurrency(value) { if (isNaN(value)) value = 0; return `R$ ${value.toFixed(2).replace('.', ',')}`; }
+            function parseDateString(dateStr) {
+                if (!/^\d{2}\/\d{2}\/\d{2,4}$/.test(dateStr)) return null;
+                const parts = dateStr.split('/');
+                const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+                return new Date(year, parts[1] - 1, parts[0]);
+            };
+            function formatDateInput(value) {
+                let v = value.replace(/\D/g, '').slice(0, 8);
+                if (v.length > 4) v = v.replace(/(\d{2})(\d{2})(\d{0,4})/, '$1/$2/$3');
+                else if (v.length > 2) v = v.replace(/(\d{2})(\d{0,2})/, '$1/$2');
+                return v;
+            };
+
+            function calculateGrandTotal() {
+                const currentMonthData = appState.monthlyData[appState.activeMonth];
+                if (!currentMonthData || !currentMonthData.apartments) return 0;
+                return currentMonthData.apartments.reduce((total, apt) => {
+                    const totalBRL = appState.financeViewActive ? apt.ganhosBrutos - apt.taxasServico : (apt.lavandariaQtd * LAUNDRY_PRICE) + (apt.lavandariaExtraQtd * LAUNDRY_PRICE) + apt.valorFaxina;
+                    return total + totalBRL;
+                }, 0);
+            }
+            
+            function renderApp() {
+                renderMainTabs();
+                tableView.style.display = appState.activeView === 'table' ? 'block' : 'none';
+                calendarView.style.display = appState.activeView === 'calendar' ? 'block' : 'none';
+                financeView.style.display = appState.activeView === 'finance' ? 'block' : 'none';
+
+                if (appState.activeView === 'table') renderTableView();
+                else if (appState.activeView === 'calendar') renderCalendarView();
+                else if (appState.activeView === 'finance') renderFinanceView();
+            };
+
+            function renderMainTabs() {
+                mainTabsContainer.innerHTML = '';
+                const tabMapping = { 'Reservas': 'table', 'Calendário': 'calendar', 'Carnê Leão': 'finance' };
+                Object.keys(tabMapping).forEach(tabName => {
+                    const viewName = tabMapping[tabName];
+                    const tab = document.createElement('a');
+                    tab.href = '#';
+                    tab.textContent = tabName;
+                    const isActive = appState.activeView === viewName;
+                    tab.className = `main-tab py-2 px-3 border-b-2 font-medium text-sm ${isActive ? 'active' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`;
+                    tab.addEventListener('click', (e) => { e.preventDefault(); appState.activeView = viewName; renderApp(); });
+                    mainTabsContainer.appendChild(tab);
+                });
+            };
+
+            function renderTableView() {
+                renderMonthTabs(monthTabsContainer, renderTableView);
+                const dataForMonth = appState.monthlyData[appState.activeMonth].apartments;
+                renderTable(dataForMonth);
+                displayGrandTotal();
+            };
+
+            function renderMonthTabs(container, callback) {
+                if (!container) return;
+                container.innerHTML = `<div class="border-b border-gray-200"><nav class="-mb-px flex flex-wrap gap-x-6 gap-y-2" aria-label="Tabs"></nav></div>`;
+                const nav = container.querySelector('nav');
+                months.forEach(month => {
+                    const tab = document.createElement('a');
+                    tab.href = '#';
+                    tab.textContent = month;
+                    tab.className = `main-tab py-2 px-3 border-b-2 font-medium text-sm ${appState.activeMonth === month ? 'active' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`;
+                    tab.addEventListener('click', (e) => { e.preventDefault(); appState.activeMonth = month; searchInput.value = ''; callback(); });
+                    nav.appendChild(tab);
+                });
+            };
+            
+            function renderTable(data) {
+                const thead = document.querySelector('#table-view thead');
+                let headerHTML = `<tr><th class="px-6 py-3">Flat</th><th class="px-6 py-3">Plataforma</th>`;
+
+                if(!appState.financeViewActive) {
+                    headerHTML += `<th class="px-6 py-3">Hóspede</th><th class="px-6 py-3">Check-in</th><th class="px-6 py-3">Check-out</th><th class="px-6 py-3">Valor Faxina</th><th class="px-6 py-3">Lavandaria (Qtd)</th><th class="px-6 py-3">Lavandaria (Valor)</th><th class="px-6 py-3">Lav. Extra?</th><th class="px-6 py-3">Quantidade Extra</th><th class="px-6 py-3">Valor Lav. Extra</th><th class="px-6 py-3">Total</th>`;
+                } else {
+                    headerHTML += `<th class="px-6 py-3">Ganhos Brutos</th><th class="px-6 py-3">Taxas de Serviço</th><th class="px-6 py-3">Total (BRL)</th>`;
+                }
+                headerHTML += `</tr>`;
+                thead.innerHTML = headerHTML;
+                
+                tableBody.innerHTML = '';
+                noResultsMessage.classList.toggle('hidden', data.length > 0);
+                data.forEach(apt => {
+                    const row = document.createElement('tr');
+                    row.className = 'bg-white border-b hover:bg-gray-50 transition-colors duration-200';
+                    row.dataset.flatId = apt.id;
+                    
+                    let rowHTML = `<td class="px-6 py-4"><input type="text" data-key="flat" class="flat-input editable-input w-20 text-center data-input" value="${apt.flat}"></td><td class="px-6 py-4"><select data-key="plataforma" class="platform-select editable-input w-full data-input">${platforms.map(p => `<option value="${p}" ${apt.plataforma === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>`;
+                    
+                    if(!appState.financeViewActive) {
+                        const valorLavandaria = apt.lavandariaQtd * LAUNDRY_PRICE;
+                        const valorLavandariaExtra = apt.lavandariaExtraQtd * LAUNDRY_PRICE;
+                        const totalServicos = valorLavandaria + valorLavandariaExtra + apt.valorFaxina;
+                        const isExtraLaundryDisabled = apt.lavandariaExtra === 'Não';
+                        rowHTML += `<td class="px-6 py-4"><input type="text" data-key="hospede" class="hospede-input editable-input w-full data-input" value="${apt.hospede.replace(/"/g, '&quot;')}" placeholder="Nome do hóspede"></td><td class="px-6 py-4"><input type="text" data-key="checkin" class="date-input editable-input w-28 data-input" value="${apt.checkin}" placeholder="dd/mm/aaaa" maxlength="10"></td><td class="px-6 py-4"><input type="text" data-key="checkout" class="date-input editable-input w-28 data-input" value="${apt.checkout}" placeholder="dd/mm/aaaa" maxlength="10"></td><td class="px-6 py-4"><input type="text" data-key="valorFaxina" class="currency-input editable-input w-24 data-input" value="${formatCurrency(apt.valorFaxina)}"></td><td class="px-6 py-4"><input type="number" data-key="lavandariaQtd" class="lavandaria-qtd-input editable-input w-20 text-center data-input" value="${apt.lavandariaQtd}" min="0"></td><td class="px-6 py-4 font-medium lavandaria-valor">${formatCurrency(valorLavandaria)}</td><td class="px-6 py-4"><select data-key="lavandariaExtra" class="lavandaria-extra-select editable-input w-full data-input"><option value="Não" ${isExtraLaundryDisabled ? 'selected' : ''}>Não</option><option value="Sim" ${!isExtraLaundryDisabled ? 'selected' : ''}>Sim</option></select></td><td class="px-6 py-4"><input type="number" data-key="lavandariaExtraQtd" class="lavandaria-extra-qtd-input editable-input w-24 text-center data-input" value="${apt.lavandariaExtraQtd}" min="0" ${isExtraLaundryDisabled ? 'disabled' : ''}></td><td class="px-6 py-4 font-medium lavandaria-extra-valor">${formatCurrency(valorLavandariaExtra)}</td><td class="px-6 py-4 font-bold text-lg total-valor">${formatCurrency(totalServicos)}</td>`;
+                    } else {
+                        const totalBRL = apt.ganhosBrutos - apt.taxasServico;
+                        rowHTML += `<td class="px-6 py-4"><input type="text" data-key="ganhosBrutos" class="currency-input editable-input w-28 data-input" value="${formatCurrency(apt.ganhosBrutos)}"></td><td class="px-6 py-4"><input type="text" data-key="taxasServico" class="currency-input editable-input w-28 data-input" value="${formatCurrency(apt.taxasServico)}"></td><td class="px-6 py-4 font-bold text-lg total-brl-valor">${formatCurrency(totalBRL)}</td>`;
+                    }
+                    row.innerHTML = rowHTML;
+                    tableBody.appendChild(row);
+                });
+            };
+
+            function displayGrandTotal() {
+                const grandTotal = calculateGrandTotal();
+                const adiantamento = appState.monthlyData[appState.activeMonth].adiantamento;
+                const saldoAPagar = grandTotal - adiantamento;
+                const colspan = appState.financeViewActive ? 4 : 11;
+                
+                tableFooter.innerHTML = `
+                    <tr class="bg-gray-100 font-bold"><td colspan="${colspan}" class="px-6 py-4 text-right text-sm uppercase">Total Geral</td><td class="px-6 py-4 text-xl text-blue-600">${formatCurrency(grandTotal)}</td></tr>
+                    <tr class="bg-gray-50 font-medium"><td colspan="${colspan}" class="px-6 py-3 text-right text-sm uppercase">Adiantamento</td><td class="px-6 py-3"><input type="text" id="adiantamento-input" class="editable-input w-full text-right" value="${formatCurrency(adiantamento)}"></td></tr>
+                    <tr class="bg-gray-200 font-bold"><td colspan="${colspan}" class="px-6 py-4 text-right text-sm uppercase">Saldo a Pagar</td><td id="saldo-a-pagar" class="px-6 py-4 text-xl text-green-600">${formatCurrency(saldoAPagar)}</td></tr>
+                `;
+            };
+            
+            function renderCalendarView() {
+                populateFlatFilter();
+                renderCalendar();
+                renderCalendarDetails(new Date());
+            };
+            
+            function populateFlatFilter() {
+                flatFilterSelect.innerHTML = '<option value="all">Todos os Flats</option>';
+                uniqueFlats.forEach(flat => {
+                    const option = document.createElement('option');
+                    option.value = flat;
+                    option.textContent = `Flat ${flat}`;
+                    flatFilterSelect.appendChild(option);
+                });
+                flatFilterSelect.value = appState.calendarFlatFilter;
+            };
+
+            function renderCalendar() {
+                const date = appState.calendarDate;
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                document.getElementById('calendar-month-year').textContent = `${months[month]} ${year}`;
+
+                const firstDayOfMonth = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const grid = document.getElementById('calendar-grid');
+                grid.innerHTML = '';
+
+                weekdays.forEach(day => {
+                    const dayEl = document.createElement('div');
+                    dayEl.className = 'calendar-day-name';
+                    dayEl.textContent = day;
+                    grid.appendChild(dayEl);
+                });
+
+                const totalCells = 42; 
+                let dayCounter = 1;
+                for (let i = 0; i < totalCells; i++) {
+                    const dayEl = document.createElement('div');
+                    if (i >= firstDayOfMonth && dayCounter <= daysInMonth) {
+                        const currentDate = new Date(year, month, dayCounter);
+                        dayEl.textContent = dayCounter;
+                        dayEl.className = 'calendar-day';
+                        
+                        const reservations = getReservationsForDay(currentDate);
+                        const uniqueFlatsOnDay = [...new Set(reservations.map(r => r.flat))];
+
+                        if (uniqueFlatsOnDay.length > 1) dayEl.classList.add('multiple');
+                        else if (uniqueFlatsOnDay.length === 1) dayEl.classList.add(`flat-${uniqueFlatsOnDay[0]}`);
+
+                        dayEl.addEventListener('click', () => {
+                            document.querySelectorAll('.calendar-day.selected').forEach(el => el.classList.remove('selected'));
+                            dayEl.classList.add('selected');
+                            renderCalendarDetails(currentDate);
+                        });
+                        dayCounter++;
+                    } else {
+                        dayEl.className = 'calendar-day empty';
+                    }
+                    grid.appendChild(dayEl);
+                }
+            };
+            
+            function getReservationsForDay(date) {
+                const reservations = [];
+                date.setHours(0, 0, 0, 0); 
+                Object.values(appState.monthlyData).forEach(monthData => {
+                    monthData.apartments.forEach(apt => {
+                        if (appState.calendarFlatFilter !== 'all' && apt.flat !== appState.calendarFlatFilter) return;
+                        const checkin = parseDateString(apt.checkin);
+                        const checkout = parseDateString(apt.checkout);
+                        if (checkin && checkout && date >= checkin && date <= checkout) {
+                            reservations.push(apt);
+                        }
+                    });
+                });
+                return reservations;
+            };
+
+            function renderCalendarDetails(date) {
+                const detailsContainer = document.getElementById('calendar-details');
+                const reservations = getReservationsForDay(date);
+                if (reservations.length === 0) {
+                    detailsContainer.innerHTML = `<p class="text-gray-500">Nenhuma reserva para este dia.</p>`;
+                    return;
+                }
+                let detailsHTML = `<h3 class="font-bold text-lg mb-2">Reservas para ${date.toLocaleDateString('pt-BR')}</h3><ul class="space-y-2">`;
+                reservations.forEach(apt => {
+                    detailsHTML += `<li class="p-2 bg-white rounded-md shadow-sm"><strong>Flat ${apt.flat} (${apt.plataforma}):</strong> ${apt.hospede || 'Sem nome'}</li>`;
+                });
+                detailsHTML += `</ul>`;
+                detailsContainer.innerHTML = detailsHTML;
+            };
+
+            function renderFinanceView() {
+                const financeContent = document.getElementById('finance-content-container');
+                financeContent.innerHTML = '';
+                renderCarneLeao(financeContent);
+            }
+
+            function renderCarneLeao(container) {
+                container.innerHTML = `
+                    <div id="carne-leao-month-tabs" class="mb-6"></div>
+                    <div id="carne-leao-content"></div>
+                `;
+                renderMonthTabs(document.getElementById('carne-leao-month-tabs'), renderFinanceView);
+                
+                const contentContainer = document.getElementById('carne-leao-content');
+                const financeData = appState.monthlyData[appState.activeMonth].finance;
+                const totalRecebimentos = Object.values(financeData.receitas).reduce((a, b) => a + b, 0);
+                const totalDespesas = Object.values(financeData.despesas).reduce((a, b) => a + b, 0);
+                const baseIr = totalRecebimentos - totalDespesas;
+                const createRow = (label, key, isReceita) => `<tr class="border-b"><td class="py-2 px-4">${label}</td><td class="py-2 px-4">${isReceita ? `<input type="text" class="finance-input editable-input w-full text-right" data-type="receita" data-key="${key}" value="${formatCurrency(financeData.receitas[key] || 0)}">` : ''}</td><td class="py-2 px-4">${!isReceita ? `<input type="text" class="finance-input editable-input w-full text-right" data-type="despesa" data-key="${key}" value="${formatCurrency(financeData.despesas[key] || 0)}">` : ''}</td></tr>`;
+                
+                contentContainer.innerHTML = `<h2 class="text-xl font-bold my-4 text-center">APURAÇÃO CARNÊ LEÃO - ${appState.activeMonth.toUpperCase()} ${new Date().getFullYear()}</h2><div class="overflow-x-auto"><table class="w-full max-w-4xl mx-auto"><thead class="bg-gray-200"><tr class="text-left"><th class="py-2 px-4 font-bold">HISTÓRICO</th><th class="py-2 px-4 font-bold text-right">CRÉDITO</th><th class="py-2 px-4 font-bold text-right">DÉBITO</th></tr></thead><tbody><tr class="bg-green-100 font-bold"><td class="py-2 px-4" colspan="3">RECEITAS</td></tr>${createRow('DI MARE 201 - AIRBNB', 'airbnb201', true)}${createRow('DI MARE 202 - AIRBNB', 'airbnb202', true)}${createRow('DI MARE 301 - AIRBNB', 'airbnb301', true)}${createRow('DI MARE 201 - BOOKING', 'booking201', true)}${createRow('DI MARE 202 - BOOKING', 'booking202', true)}${createRow('DI MARE 301 - BOOKING', 'booking301', true)}<tr class="bg-green-200 font-bold"><td class="py-2 px-4 text-right">TOTAL RECEBIMENTOS</td><td class="py-2 px-4 text-right" id="total-recebimentos">${formatCurrency(totalRecebimentos)}</td><td></td></tr><tr class="bg-red-100 font-bold"><td class="py-2 px-4" colspan="3">DESPESAS</td></tr>${createRow('CONDOMINIO - 201', 'condominio201', false)}${createRow('CONDOMINIO - 202', 'condominio202', false)}${createRow('CONDOMINIO - 301', 'condominio301', false)}${createRow('CELPE.NF - APART.201', 'celpe201', false)}${createRow('CELPENF - APART.202', 'celpe202', false)}${createRow('CELPENF - APART.301', 'celpe301', false)}${createRow('COMISSÃO 201 - AIRBNB', 'comissaoAirbnb201', false)}${createRow('COMISSÃO 202 - AIRBNB', 'comissaoAirbnb202', false)}${createRow('COMISSÃO 301 - AIRBNB', 'comissaoAirbnb301', false)}${createRow('COMISSÃO 201 - BOOKING', 'comissaoBooking201', false)}${createRow('COMISSÃO 202 - BOOKING', 'comissaoBooking202', false)}${createRow('COMISSÃO 301 - BOOKING', 'comissaoBooking301', false)}<tr class="bg-red-200 font-bold"><td class="py-2 px-4 text-right">TOTAL DESPESAS</td><td></td><td class="py-2 px-4 text-right" id="total-despesas">${formatCurrency(totalDespesas)}</td></tr></tbody><tfoot class="border-t-2"><tr class="font-bold"><td class="py-3 px-4 text-right" colspan="2">BASE I.RENDA- CARNE LEÃO</td><td id="base-ir" class="py-3 px-4 text-right">${formatCurrency(baseIr)}</td></tr><tr class="font-bold"><td class="py-3 px-4 text-right" colspan="2">I. DE RENDA DEVIDO</td><td class="py-3 px-4"><input type="text" class="finance-input editable-input w-full text-right" data-type="imposto" data-key="impostoDevido" value="${formatCurrency(financeData.impostoDevido || 0)}"></td></tr></tfoot></table></div>
+                <div class="text-center mt-6">
+                    <button id="download-carne-leao-pdf-btn" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">Baixar Relatório em PDF</button>
+                 </div>`;
+                document.getElementById('download-carne-leao-pdf-btn').addEventListener('click', generateCarneLeaoPDF);
+            }
+            
+            function addFinanceEventListeners() {
+                const container = document.getElementById('finance-view');
+                container.addEventListener('focusout', (event) => {
+                    if (event.target.classList.contains('finance-input')) {
+                        const type = event.target.dataset.type;
+                        const key = event.target.dataset.key;
+                        const rawValue = event.target.value.replace(/\D/g, '');
+                        const numericValue = (parseInt(rawValue, 10) || 0) / 100;
+
+                        if (type === 'receita') appState.monthlyData[appState.activeMonth].finance.receitas[key] = numericValue;
+                        else if (type === 'despesa') appState.monthlyData[appState.activeMonth].finance.despesas[key] = numericValue;
+                        else if (type === 'imposto') appState.monthlyData[appState.activeMonth].finance.impostoDevido = numericValue;
+                        
+                        renderFinanceView();
+                    }
+                });
+            }
+            
+            function addTableEventListeners() {
+                tableBody.addEventListener('input', (event) => {
+                    const target = event.target;
+                    if (target.classList.contains('data-input')) {
+                        const flatId = target.closest('tr').dataset.flatId;
+                        const key = target.dataset.key;
+                        let value = target.value;
+                        if (target.classList.contains('date-input')) {
+                            value = formatDateInput(value);
+                            target.value = value;
+                        } else if (target.classList.contains('currency-input')) {
+                            const rawValue = value.replace(/\D/g, '');
+                            value = (parseInt(rawValue, 10) || 0) / 100;
+                        }
+                        updateAndRecalculate(flatId, key, value);
+                    }
+                });
+
+                tableBody.addEventListener('focusout', (event) => {
+                     const target = event.target;
+                    if (target.classList.contains('currency-input')) {
+                        const flatId = target.closest('tr').dataset.flatId;
+                        const apartment = appState.monthlyData[appState.activeMonth].apartments.find(apt => apt.id === flatId);
+                        if (apartment) {
+                            const key = target.dataset.key;
+                            target.value = formatCurrency(apartment[key]);
+                        }
+                    }
+                });
+
+                tableFooter.addEventListener('focusout', (event) => {
+                    if (event.target.id === 'adiantamento-input') {
+                        const rawValue = event.target.value.replace(/\D/g, '');
+                        appState.monthlyData[appState.activeMonth].adiantamento = (parseInt(rawValue, 10) || 0) / 100;
+                        displayGrandTotal();
+                    }
+                });
+            }
+
+            // --- UPDATED FUNCTION ---
+            function updateAndRecalculate(flatId, key, value) {
+                const apartment = appState.monthlyData[appState.activeMonth].apartments.find(apt => apt.id === flatId);
+                if (!apartment) return;
+
+                // The event listener already provides a number for currency fields.
+                // For number inputs, we parse it to ensure it's a number type.
+                if (['lavandariaQtd', 'lavandariaExtraQtd'].includes(key)) {
+                    apartment[key] = parseInt(value, 10) || 0;
+                } else {
+                    apartment[key] = value;
+                }
+                
+                const row = tableBody.querySelector(`tr[data-flat-id="${flatId}"]`);
+                if (!row) return; // Exit if row not found in DOM
+
+                // Update the DOM based on the current view
+                if (appState.financeViewActive) {
+                    // --- Financial View Update ---
+                    const totalBRL = apartment.ganhosBrutos - apartment.taxasServico;
+                    const totalBrlCell = row.querySelector('.total-brl-valor');
+                    if (totalBrlCell) {
+                        totalBrlCell.textContent = formatCurrency(totalBRL);
+                    }
+                } else {
+                    // --- Services View Update ---
+                    if (key === 'lavandariaExtra') {
+                        const isExtra = value === 'Sim';
+                        if (!isExtra) apartment.lavandariaExtraQtd = 0;
+                        const extraQtdInput = row.querySelector('.lavandaria-extra-qtd-input');
+                        if (extraQtdInput) {
+                            extraQtdInput.disabled = !isExtra;
+                            if (!isExtra) extraQtdInput.value = 0;
+                        }
+                    }
+                    const valorLavandaria = apartment.lavandariaQtd * LAUNDRY_PRICE;
+                    const valorLavandariaExtra = apartment.lavandariaExtraQtd * LAUNDRY_PRICE;
+                    const totalServicos = valorLavandaria + valorLavandariaExtra + apartment.valorFaxina;
+                    
+                    const lavandariaValorCell = row.querySelector('.lavandaria-valor');
+                    if(lavandariaValorCell) lavandariaValorCell.textContent = formatCurrency(valorLavandaria);
+                    
+                    const lavandariaExtraValorCell = row.querySelector('.lavandaria-extra-valor');
+                    if(lavandariaExtraValorCell) lavandariaExtraValorCell.textContent = formatCurrency(valorLavandariaExtra);
+
+                    const totalValorCell = row.querySelector('.total-valor');
+                    if(totalValorCell) totalValorCell.textContent = formatCurrency(totalServicos);
+                }
+                
+                displayGrandTotal();
+            }
+            
+            function generateFullPDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: "landscape" });
+                const tableHeaders = ["Flat", "Plataforma", "Hóspede", "Check-in", "Check-out", "V. Faxina", "Qtd Lav.", "V. Lav.", "Extra?", "Qtd Extra", "V. Lav. Extra", "Total"];
+                const tableBodyData = appState.monthlyData[appState.activeMonth].apartments.map(apt => {
+                    const valorLavandaria = apt.lavandariaQtd * LAUNDRY_PRICE;
+                    const valorLavandariaExtra = apt.lavandariaExtraQtd * LAUNDRY_PRICE;
+                    const totalGeral = valorLavandaria + valorLavandariaExtra + apt.valorFaxina;
+                    return [ apt.flat, apt.plataforma, apt.hospede, apt.checkin, apt.checkout, formatCurrency(apt.valorFaxina), apt.lavandariaQtd, formatCurrency(valorLavandaria), apt.lavandariaExtra, apt.lavandariaExtraQtd, formatCurrency(valorLavandariaExtra), formatCurrency(totalGeral)];
+                });
+                doc.text(`Relatório de Informações Gerais - ${appState.activeMonth}`, 14, 16);
+                doc.autoTable({ head: [tableHeaders], body: tableBodyData, startY: 20, theme: 'grid', styles: { fontSize: 8 }, headStyles: { fillColor: [22, 160, 133] }});
+                const finalY = doc.lastAutoTable.finalY;
+                const grandTotal = calculateGrandTotal();
+                const saldoAPagar = grandTotal - appState.monthlyData[appState.activeMonth].adiantamento;
+                
+                doc.setFontSize(10);
+                doc.text(`Total Geral: ${formatCurrency(grandTotal)}`, 280, finalY + 10, { align: 'right' });
+                doc.text(`Adiantamento: ${formatCurrency(appState.monthlyData[appState.activeMonth].adiantamento)}`, 280, finalY + 15, { align: 'right' });
+                doc.setFontSize(12);
+                doc.setFont(undefined, 'bold');
+                doc.text(`Saldo a Pagar: ${formatCurrency(saldoAPagar)}`, 280, finalY + 20, { align: 'right' });
+                doc.save(`relatorio_geral_${appState.activeMonth}.pdf`);
+            };
+            
+            function generateReceptionPDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: "portrait" });
+                const tableHeaders = ["Flat", "Plataforma", "Hóspede", "Check-in", "Check-out"];
+                const tableBodyData = appState.monthlyData[appState.activeMonth].apartments.map(apt => [apt.flat, apt.plataforma, apt.hospede, apt.checkin, apt.checkout]);
+                doc.text(`Relatório de Recepção - ${appState.activeMonth}`, 14, 16);
+                doc.autoTable({ head: [tableHeaders], body: tableBodyData, startY: 20, theme: 'grid', styles: { fontSize: 10 }, headStyles: { fillColor: [76, 175, 80] }});
+                doc.save(`relatorio_recepcao_${appState.activeMonth}.pdf`);
+            };
+
+            function generateCleaningPDF() {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: "landscape" });
+                const tableHeaders = ["Flat", "Plataforma", "Hóspede", "Check-in", "Check-out", "Valor Faxina", "Lavandaria (Qtd)", "Lavandaria (Valor)", "Lav. Extra?", "Quantidade Extra", "Valor Lav. Extra"];
+                const tableBodyData = appState.monthlyData[appState.activeMonth].apartments.map(apt => {
+                    const valorLavandaria = apt.lavandariaQtd * LAUNDRY_PRICE;
+                    const valorLavandariaExtra = apt.lavandariaExtraQtd * LAUNDRY_PRICE;
+                    return [apt.flat, apt.plataforma, apt.hospede, apt.checkin, apt.checkout, formatCurrency(apt.valorFaxina), apt.lavandariaQtd, formatCurrency(valorLavandaria), apt.lavandariaExtra, apt.lavandariaExtraQtd, formatCurrency(valorLavandariaExtra)];
+                });
+                doc.text(`Relatório de Faxina e Lavandaria - ${appState.activeMonth}`, 14, 16);
+                doc.autoTable({ head: [tableHeaders], body: tableBodyData, startY: 20, theme: 'grid', styles: { fontSize: 8 }, headStyles: { fillColor: [245, 166, 35] }});
+                doc.save(`relatorio_faxina_${appState.activeMonth}.pdf`);
+            };
+            
+            function generateCarneLeaoPDF() {
+                 const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: "portrait" });
+                const financeData = appState.monthlyData[appState.activeMonth].finance;
+
+                const head = [['HISTÓRICO', 'CRÉDITO', 'DÉBITO']];
+                const body = [];
+                
+                body.push([{ content: 'RECEITAS', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [224, 242, 254] } }]);
+                for (const key in financeData.receitas) {
+                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace('airbnb', 'AIRBNB').replace('booking', 'BOOKING').replace(/(\d+)/, ' $1 -');
+                    body.push([`DI MARE${label}`, formatCurrency(financeData.receitas[key]), '']);
+                }
+                const totalRecebimentos = Object.values(financeData.receitas).reduce((a, b) => a + b, 0);
+                 body.push([{ content: 'TOTAL RECEBIMENTOS', styles: { fontStyle: 'bold' }, halign: 'right' }, { content: formatCurrency(totalRecebimentos), styles: { fontStyle: 'bold' } }, '']);
+
+                body.push([{ content: 'DESPESAS', colSpan: 3, styles: { fontStyle: 'bold', fillColor: [254, 226, 226] } }]);
+                for (const key in financeData.despesas) {
+                     const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace('airbnb', 'AIRBNB').replace('booking', 'BOOKING').replace(/(\d+)/, ' $1 -').replace('Celpe', 'CELPE.NF').replace('Condominio', 'CONDOMINIO');
+                     body.push([label, '', formatCurrency(financeData.despesas[key])]);
+                }
+                 const totalDespesas = Object.values(financeData.despesas).reduce((a, b) => a + b, 0);
+                 body.push([{ content: 'TOTAL DESPESAS', styles: { fontStyle: 'bold' }, halign: 'right' }, '', { content: formatCurrency(totalDespesas), styles: { fontStyle: 'bold' } }]);
+
+                doc.text(`APURAÇÃO CARNÊ LEÃO - ${appState.activeMonth.toUpperCase()} ${new Date().getFullYear()}`, 14, 16);
+                doc.autoTable({
+                    head: head,
+                    body: body,
+                    startY: 20,
+                    theme: 'grid'
+                });
+
+                 const finalY = doc.lastAutoTable.finalY;
+                 const baseIr = totalRecebimentos - totalDespesas;
+                 doc.setFontSize(10);
+                 doc.setFont(undefined, 'bold');
+                 doc.text('BASE I.RENDA- CARNE LEÃO', 140, finalY + 10, { align: 'right' });
+                 doc.text(formatCurrency(baseIr), 190, finalY + 10, { align: 'right' });
+                 doc.text('I. DE RENDA DEVIDO', 140, finalY + 15, { align: 'right' });
+                 doc.text(formatCurrency(financeData.impostoDevido), 190, finalY + 15, { align: 'right' });
+
+
+                doc.save(`carne_leao_${appState.activeMonth}.pdf`);
+            }
+
+            // --- Init & Global Listeners ---
+            addTableEventListeners();
+            addFinanceEventListeners();
+            
+            document.getElementById('prev-month-btn').addEventListener('click', () => { appState.calendarDate.setMonth(appState.calendarDate.getMonth() - 1); renderCalendar(); });
+            document.getElementById('next-month-btn').addEventListener('click', () => { appState.calendarDate.setMonth(appState.calendarDate.getMonth() + 1); renderCalendar(); });
+            document.getElementById('flat-filter').addEventListener('change', (event) => { appState.calendarFlatFilter = event.target.value; renderCalendar(); document.getElementById('calendar-details').innerHTML = '<p class="text-gray-500">Selecione um dia para ver os detalhes.</p>'; });
+            document.getElementById('searchInput').addEventListener('keyup', () => { if (appState.activeView === 'table') filterData(); });
+            fullPdfButton.addEventListener('click', generateFullPDF);
+            receptionPdfButton.addEventListener('click', generateReceptionPDF);
+            cleaningPdfButton.addEventListener('click', generateCleaningPDF);
+            toggleViewBtn.addEventListener('click', () => {
+                appState.financeViewActive = !appState.financeViewActive;
+                toggleViewBtn.textContent = appState.financeViewActive ? 'Mostrar Detalhes' : 'Mostrar Finanças';
+                renderTableView();
+            });
+            
+            renderApp();
+        });
+    </script>
+</body>
+</html>
